@@ -13,6 +13,7 @@ const mongoUri = process.env.MONGO_URI || 'mongodb://root:rootpassword@mongo-tod
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000 // Falha rápido em 5s se a URI estiver errada
 })
   .then(() => console.log('Conectado ao MongoDB'))
   .catch((err) => console.error('Erro ao conectar ao MongoDB:', err));
