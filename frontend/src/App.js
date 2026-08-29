@@ -2,38 +2,57 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
+// URL base da API apontando para o ALB da AWS
+const API_URL = 'http://alb-uniamerica-1521053340.us-east-1.elb.amazonaws.com:5000/todos';
+
 function App() {
   const [todos, setTodos] = useState([]);
   const [task, setTask] = useState(""); 
 
   // Função para carregar os todos da API
   const fetchTodos = async () => {
-    const response = await axios.get('http://localhost:5000/todos');
-    setTodos(response.data);
+    try {
+      const response = await axios.get(API_URL);
+      setTodos(response.data);
+    } catch (error) {
+      console.error("Erro ao buscar tarefas:", error);
+    }
   };
 
   // Função para adicionar uma nova tarefa
   const addTodo = async () => {
     if (task.trim()) {
-      const response = await axios.post('http://localhost:5000/todos', { text: task });
-      setTodos([...todos, response.data]);
-      setTask("");
+      try {
+        const response = await axios.post(API_URL, { text: task });
+        setTodos([...todos, response.data]);
+        setTask("");
+      } catch (error) {
+        console.error("Erro ao adicionar tarefa:", error);
+      }
     }
   };
 
   // Função para marcar a tarefa como concluída
   const toggleComplete = async (id) => {
-    const response = await axios.patch(`http://localhost:5000/todos/${id}`);
-    const updatedTodos = todos.map(todo =>
-      todo._id === id ? response.data : todo
-    );
-    setTodos(updatedTodos);
+    try {
+      const response = await axios.patch(`${API_URL}/${id}`);
+      const updatedTodos = todos.map(todo =>
+        todo._id === id ? response.data : todo
+      );
+      setTodos(updatedTodos);
+    } catch (error) {
+      console.error("Erro ao atualizar tarefa:", error);
+    }
   };
 
   // Função para excluir a tarefa
   const deleteTodo = async (id) => {
-    await axios.delete(`http://localhost:5000/todos/${id}`);
-    setTodos(todos.filter(todo => todo._id !== id));
+    try {
+      await axios.delete(`${API_URL}/${id}`);
+      setTodos(todos.filter(todo => todo._id !== id));
+    } catch (error) {
+      console.error("Erro ao deletar tarefa:", error);
+    }
   };
 
   // Carregar a lista de todos ao iniciar o componente
