@@ -7,8 +7,10 @@ const bodyParser = require('body-parser');
 const app = express();
 const port = 5000;
 
-// Conexão com o MongoDB (com autenticação)
-mongoose.connect('mongodb://root:rootpassword@mongo-todo:27017/todo-app?authSource=admin', {
+// Conexão com o MongoDB (Lê da variável de ambiente MONGO_URI ou usa o padrão local)
+const mongoUri = process.env.MONGO_URI || 'mongodb://root:rootpassword@mongo-todo:27017/todo-app?authSource=admin';
+
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
