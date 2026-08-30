@@ -18,8 +18,13 @@ mongoose.connect(mongoUri, {
   .then(() => console.log('Conectado ao MongoDB'))
   .catch((err) => console.error('Erro ao conectar ao MongoDB:', err));
 
-// Middleware para habilitar CORS e processar JSON
-app.use(cors());
+// Middleware para habilitar CORS liberando o API Gateway e métodos necessários
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(bodyParser.json());
 
 // Definindo o modelo de Tarefa (To-do)
