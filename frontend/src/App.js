@@ -3,7 +3,7 @@ import axios from 'axios';
 import './App.css';
 
 // URL base da API apontando para o ALB da AWS
-const API_URL = 'https://z2vlfyyxak.execute-api.us-east-1.amazonaws.com';
+const API_URL = 'https://z2vlfyyxak.execute-api.us-east-1.amazonaws.com/todos';
 
 function App() {
   const [todos, setTodos] = useState([]);
