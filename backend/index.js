@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const crypto = require('crypto');
 
 // Inicializando o app Express
 const app = express();
@@ -13,10 +14,69 @@ const mongoUri = process.env.MONGO_URI || 'mongodb://root:rootpassword@mongo-tod
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000 // Falha rápido em 5s se a URI estiver errada
+  serverSelectionTimeoutMS: 5000
 })
   .then(() => console.log('Conectado ao MongoDB'))
   .catch((err) => console.error('Erro ao conectar ao MongoDB:', err));
+
+// ===== OBSERVABILIDADE: log estruturado de requisições HTTP =====
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  req.requestId = crypto.randomUUID();
+
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'backend',
+      environment: process.env.NODE_ENV || 'production',
+      level: res.statusCode >= 500 ? 'ERROR' : res.statusCode >= 400 ? 'WARN' : 'INFO',
+      event: 'http_request',
+      requestId: req.requestId,
+      method: req.method,
+      route: req.route ? req.route.path : req.path,
+      statusCode: res.statusCode,
+      durationMs: Math.round(durationMs * 100) / 100,
+    }));
+  });
+
+  next();
+});
+
+// ===== OBSERVABILIDADE: helper de log de operação de banco =====
+async function logDbOperation(operation, collection, fn) {
+  const start = process.hrtime.bigint();
+  try {
+    const result = await fn();
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'backend',
+      level: 'INFO',
+      event: 'db_operation',
+      operation,
+      collection,
+      result: 'success',
+      durationMs: Math.round(durationMs * 100) / 100,
+    }));
+    return result;
+  } catch (err) {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'backend',
+      level: 'ERROR',
+      event: 'db_operation',
+      operation,
+      collection,
+      result: 'failure',
+      errorType: err.name,
+      errorMessage: err.message,
+      durationMs: Math.round(durationMs * 100) / 100,
+    }));
+    throw err;
+  }
+}
 
 // Middleware para habilitar CORS liberando o API Gateway e métodos necessários
 app.use(cors({
@@ -38,7 +98,7 @@ const Todo = mongoose.model('Todo', TodoSchema);
 // Rota para obter todas as tarefas (GET)
 app.get('/todos', async (req, res) => {
   try {
-    const todos = await Todo.find(); // Retorna todas as tarefas do banco
+    const todos = await logDbOperation('find', 'todos', () => Todo.find());
     res.json(todos);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -47,9 +107,8 @@ app.get('/todos', async (req, res) => {
 
 // Rota para adicionar uma nova tarefa (POST)
 app.post('/todos', async (req, res) => {
-  const { text } = req.body; // Obtém o texto da tarefa do corpo da requisição
+  const { text } = req.body;
 
-  // Verifica se o campo "text" está presente
   if (!text) {
     return res.status(400).json({ message: 'O campo "text" é obrigatório' });
   }
@@ -60,26 +119,25 @@ app.post('/todos', async (req, res) => {
   });
 
   try {
-    const newTodo = await todo.save(); // Salva a tarefa no banco
-    res.status(201).json(newTodo); // Retorna a tarefa criada
+    const newTodo = await logDbOperation('insertOne', 'todos', () => todo.save());
+    res.status(201).json(newTodo);
   } catch (err) {
-    res.status(400).json({ message: err.message }); // Retorna erro se houver falha no banco de dados
+    res.status(400).json({ message: err.message });
   }
 });
 
 // Rota para marcar uma tarefa como concluída (PATCH)
 app.patch('/todos/:id', async (req, res) => {
   try {
-    const todo = await Todo.findById(req.params.id); // Encontra a tarefa pelo ID
+    const todo = await logDbOperation('findById', 'todos', () => Todo.findById(req.params.id));
 
     if (!todo) {
       return res.status(404).json({ message: 'Tarefa não encontrada' });
     }
 
-    // Alterna o status de "completed" da tarefa
     todo.completed = !todo.completed;
-    await todo.save(); // Salva a tarefa modificada
-    res.json(todo); // Retorna a tarefa atualizada
+    await logDbOperation('updateOne', 'todos', () => todo.save());
+    res.json(todo);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -88,13 +146,13 @@ app.patch('/todos/:id', async (req, res) => {
 // Rota para excluir uma tarefa (DELETE)
 app.delete('/todos/:id', async (req, res) => {
   try {
-    const todo = await Todo.findByIdAndDelete(req.params.id); // Deleta a tarefa pelo ID
+    const todo = await logDbOperation('findByIdAndDelete', 'todos', () => Todo.findByIdAndDelete(req.params.id));
 
     if (!todo) {
       return res.status(404).json({ message: 'Tarefa não encontrada' });
     }
 
-    res.json({ message: 'Tarefa excluída com sucesso' }); // Retorna uma mensagem de sucesso
+    res.json({ message: 'Tarefa excluída com sucesso' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
