@@ -25,21 +25,22 @@ app.use((req, res, next) => {
   req.requestId = crypto.randomUUID();
 
   res.on('finish', () => {
-    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      service: 'backend',
-      environment: process.env.NODE_ENV || 'production',
-      level: res.statusCode >= 500 ? 'ERROR' : res.statusCode >= 400 ? 'WARN' : 'INFO',
-      event: 'http_request',
-      requestId: req.requestId,
-      method: req.method,
-      route: req.route ? req.route.path : req.path,
-      statusCode: res.statusCode,
-      durationMs: Math.round(durationMs * 100) / 100,
-      clientIp: (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
-    }));
-  });
+  const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    service: 'backend',
+    environment: process.env.NODE_ENV || 'production',
+    level: res.statusCode >= 500 ? 'ERROR' : res.statusCode >= 400 ? 'WARN' : 'INFO',
+    event: 'http_request',
+    requestId: req.requestId,
+    method: req.method,
+    route: req.route ? req.route.path : req.path,
+    statusCode: res.statusCode,
+    durationMs: Math.round(durationMs * 100) / 100,
+    clientIp: (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
+    userAgent: req.headers['user-agent'] || 'unknown',
+  }));
+});
 
   next();
 });
