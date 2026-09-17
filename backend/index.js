@@ -25,28 +25,28 @@ app.use((req, res, next) => {
   req.requestId = crypto.randomUUID();
 
   res.on('finish', () => {
-  const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    service: 'backend',
-    environment: process.env.NODE_ENV || 'production',
-    level: res.statusCode >= 500 ? 'ERROR' : res.statusCode >= 400 ? 'WARN' : 'INFO',
-    event: 'http_request',
-    requestId: req.requestId,
-    method: req.method,
-    route: req.route ? req.route.path : req.path,
-    statusCode: res.statusCode,
-    durationMs: Math.round(durationMs * 100) / 100,
-    clientIp: (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
-    userAgent: req.headers['user-agent'] || 'unknown',
-  }));
-});
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      service: 'backend',
+      environment: process.env.NODE_ENV || 'production',
+      level: res.statusCode >= 500 ? 'ERROR' : res.statusCode >= 400 ? 'WARN' : 'INFO',
+      event: 'http_request',
+      requestId: req.requestId,
+      method: req.method,
+      route: req.route ? req.route.path : req.path,
+      statusCode: res.statusCode,
+      durationMs: Math.round(durationMs * 100) / 100,
+      clientIp: (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
+      userAgent: req.headers['user-agent'] || 'unknown',
+    }));
+  });
 
   next();
 });
 
 // ===== OBSERVABILIDADE: helper de log de operação de banco =====
-async function logDbOperation(operation, collection, fn) {
+async function logDbOperation(operation, collection, fn, meta = {}) {
   const start = process.hrtime.bigint();
   try {
     const result = await fn();
@@ -60,6 +60,8 @@ async function logDbOperation(operation, collection, fn) {
       collection,
       result: 'success',
       durationMs: Math.round(durationMs * 100) / 100,
+      requestId: meta.requestId,
+      userAgent: meta.userAgent,
     }));
     return result;
   } catch (err) {
@@ -75,6 +77,8 @@ async function logDbOperation(operation, collection, fn) {
       errorType: err.name,
       errorMessage: err.message,
       durationMs: Math.round(durationMs * 100) / 100,
+      requestId: meta.requestId,
+      userAgent: meta.userAgent,
     }));
     throw err;
   }
@@ -100,7 +104,10 @@ const Todo = mongoose.model('Todo', TodoSchema);
 // Rota para obter todas as tarefas (GET)
 app.get('/todos', async (req, res) => {
   try {
-    const todos = await logDbOperation('find', 'todos', () => Todo.find());
+    const todos = await logDbOperation('find', 'todos', () => Todo.find(), {
+      requestId: req.requestId,
+      userAgent: req.headers['user-agent'],
+    });
     res.json(todos);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -121,7 +128,10 @@ app.post('/todos', async (req, res) => {
   });
 
   try {
-    const newTodo = await logDbOperation('insertOne', 'todos', () => todo.save());
+    const newTodo = await logDbOperation('insertOne', 'todos', () => todo.save(), {
+      requestId: req.requestId,
+      userAgent: req.headers['user-agent'],
+    });
     res.status(201).json(newTodo);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -131,14 +141,20 @@ app.post('/todos', async (req, res) => {
 // Rota para marcar uma tarefa como concluída (PATCH)
 app.patch('/todos/:id', async (req, res) => {
   try {
-    const todo = await logDbOperation('findById', 'todos', () => Todo.findById(req.params.id));
+    const todo = await logDbOperation('findById', 'todos', () => Todo.findById(req.params.id), {
+      requestId: req.requestId,
+      userAgent: req.headers['user-agent'],
+    });
 
     if (!todo) {
       return res.status(404).json({ message: 'Tarefa não encontrada' });
     }
 
     todo.completed = !todo.completed;
-    await logDbOperation('updateOne', 'todos', () => todo.save());
+    await logDbOperation('updateOne', 'todos', () => todo.save(), {
+      requestId: req.requestId,
+      userAgent: req.headers['user-agent'],
+    });
     res.json(todo);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -148,7 +164,10 @@ app.patch('/todos/:id', async (req, res) => {
 // Rota para excluir uma tarefa (DELETE)
 app.delete('/todos/:id', async (req, res) => {
   try {
-    const todo = await logDbOperation('findByIdAndDelete', 'todos', () => Todo.findByIdAndDelete(req.params.id));
+    const todo = await logDbOperation('findByIdAndDelete', 'todos', () => Todo.findByIdAndDelete(req.params.id), {
+      requestId: req.requestId,
+      userAgent: req.headers['user-agent'],
+    });
 
     if (!todo) {
       return res.status(404).json({ message: 'Tarefa não encontrada' });
