@@ -37,6 +37,7 @@ app.use((req, res, next) => {
       route: req.route ? req.route.path : req.path,
       statusCode: res.statusCode,
       durationMs: Math.round(durationMs * 100) / 100,
+      clientIp: (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(),
     }));
   });
 
